@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 320" width="880" height="320" role="img" aria-label="PassGuard Web Agent Security Flow">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#34d399"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="880" height="320" rx="14" fill="url(#bg)"/>
+  <text x="28" y="38" fill="#f8fafc" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" font-weight="700">
+    PassGuard Web Agent — Out-of-Band Security Gate Demo
+  </text>
+  <line x1="28" y1="52" x2="852" y2="52" stroke="#334155" stroke-width="1"/>
+
+  <!-- Step 1: Agent CLI -->
+  <rect x="28" y="72" width="250" height="214" rx="10" fill="#0b1220" stroke="#38bdf8" stroke-width="1.5"/>
+  <text x="44" y="98" fill="#38bdf8" font-family="ui-monospace, monospace" font-size="13" font-weight="700">1. AI Agent (DOM Refs)</text>
+  <text x="44" y="126" fill="#94a3b8" font-family="ui-monospace, monospace" font-size="12">$ safe_browser.py snapshot</text>
+  <text x="44" y="148" fill="#cbd5e1" font-family="ui-monospace, monospace" font-size="11">[@e1] input: Order Note</text>
+  <text x="44" y="168" fill="#cbd5e1" font-family="ui-monospace, monospace" font-size="11">[@e2] button: "Continue"</text>
+  <text x="44" y="190" fill="#f87171" font-family="ui-monospace, monospace" font-size="11">[hidden text stripped]</text>
+  <text x="44" y="218" fill="#94a3b8" font-family="ui-monospace, monospace" font-size="12">$ safe_browser.py click @e2</text>
+  <text x="44" y="246" fill="#fbbf24" font-family="ui-monospace, monospace" font-size="11">No --confirm-risk bypass!</text>
+
+  <!-- Arrow 1->2 -->
+  <path d="M 282 178 L 314 178" stroke="url(#accent)" stroke-width="2.5"/>
+  <polygon points="314,173 324,178 314,183" fill="#34d399"/>
+
+  <!-- Step 2: Route Guard -->
+  <rect x="328" y="72" width="250" height="214" rx="10" fill="#0b1220" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="344" y="98" fill="#fbbf24" font-family="ui-monospace, monospace" font-size="13" font-weight="700">2. PassGuard Daemon Guard</text>
+  <text x="344" y="126" fill="#cbd5e1" font-family="ui-monospace, monospace" font-size="11">Deceptive button fires:</text>
+  <text x="344" y="148" fill="#f87171" font-family="ui-monospace, monospace" font-size="12">POST /api/pay ($999)</text>
+  <text x="344" y="176" fill="#34d399" font-family="ui-monospace, monospace" font-size="11">✓ ServiceWorker blocked</text>
+  <text x="344" y="196" fill="#34d399" font-family="ui-monospace, monospace" font-size="11">✓ Domain allowlist checked</text>
+  <text x="344" y="216" fill="#34d399" font-family="ui-monospace, monospace" font-size="11">✓ Taint egress checked</text>
+  <text x="344" y="236" fill="#34d399" font-family="ui-monospace, monospace" font-size="11">✓ Request paused pre-send</text>
+  <text x="344" y="262" fill="#94a3b8" font-family="ui-monospace, monospace" font-size="11">Audit: HMAC-SHA256 chained</text>
+
+  <!-- Arrow 2->3 -->
+  <path d="M 582 178 L 614 178" stroke="url(#accent)" stroke-width="2.5"/>
+  <polygon points="614,173 624,178 614,183" fill="#34d399"/>
+
+  <!-- Step 3: Native OOB OS Dialog -->
+  <rect x="628" y="72" width="224" height="214" rx="10" fill="#f8fafc" stroke="#34d399" stroke-width="2"/>
+  <rect x="628" y="72" width="224" height="32" rx="10" fill="#0f766e"/>
+  <text x="642" y="93" fill="#ffffff" font-family="system-ui, sans-serif" font-size="12" font-weight="700">PassGuard Security Gate</text>
+  <text x="642" y="124" fill="#0f172a" font-family="system-ui, sans-serif" font-size="12" font-weight="700">Allow POST write request?</text>
+  <text x="642" y="148" fill="#334155" font-family="ui-monospace, monospace" font-size="11">URL: /api/pay</text>
+  <text x="642" y="168" fill="#334155" font-family="ui-monospace, monospace" font-size="11">JSON fields:</text>
+  <text x="642" y="186" fill="#334155" font-family="ui-monospace, monospace" font-size="11">  - amount: 999</text>
+  <text x="642" y="204" fill="#334155" font-family="ui-monospace, monospace" font-size="11">  - token: [REDACTED]</text>
+  <rect x="646" y="232" width="84" height="32" rx="6" fill="#e2e8f0" stroke="#94a3b8"/>
+  <text x="676" y="252" fill="#0f172a" font-family="system-ui, sans-serif" font-size="12" font-weight="700">No</text>
+  <rect x="744" y="232" width="88" height="32" rx="6" fill="#0f766e"/>
+  <text x="774" y="252" fill="#ffffff" font-family="system-ui, sans-serif" font-size="12" font-weight="700">Yes</text>
+</svg>

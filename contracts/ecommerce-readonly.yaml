@@ -1,0 +1,13 @@
+task: "Read-only e-commerce price comparison and order inspection"
+domains:
+  - example-shop.com
+asset_domains:
+  - cdn.example-shop.com
+allow:
+  - navigate
+  - read
+  - click
+max_write_requests: 0
+confirm_writes_mode: strict
+expires_in_seconds: 1800
+ephemeral: false

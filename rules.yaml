@@ -1,7 +1,7 @@
 # PassGuard Web Agent Security Policy
 
 # URL path / keyword patterns that indicate an authentication or login flow.
-# When matched, the agent must pause and let the user log in manually.
+# Matched on path segment boundaries (e.g., /auth matches /auth/login, not /author).
 login_url_patterns:
   - /login
   - /signin
@@ -11,9 +11,26 @@ login_url_patterns:
   - /sso
   - /passport
   - /session/new
+  - /2fa
+  - /mfa
+  - /verify-otp
+  - /passkey
+  - /webauthn
+
+# Visible page phrases indicating QR / OTP / Passkey authentication prompts.
+login_text_indicators:
+  - 扫码登录
+  - 手机验证码
+  - 短信验证码
+  - 二次验证
+  - verification code
+  - one-time code
+  - passkey
+  - two-factor authentication
 
 # Keywords on buttons, links, or submit controls that trigger a mandatory
 # out-of-band (OOB) human confirmation dialog before clicking.
+# ASCII words use whole-word boundaries (e.g., "wire" will not match "wireless").
 high_risk_keywords:
   - 支付
   - 付款
@@ -50,6 +67,15 @@ read_only_blocked_methods:
   - PATCH
   - DELETE
 
+# Optional URL path substrings for benign telemetry/autocomplete POSTs that can
+# be auto-allowed ONLY when confirm_writes_mode is "smart" (never in "strict" or read-only).
+benign_write_url_patterns:
+  - /collect
+  - /telemetry
+  - /analytics
+  - /heartbeat
+  - /ping
+
 # Regex patterns redacted from page snapshots, text outputs, request previews,
 # and audit logs before returning data to the LLM context.
 redaction_patterns:
@@ -69,7 +95,7 @@ redaction_patterns:
     pattern: '(?i)\b(access_token|refresh_token|id_token|session_id|csrf_token|api_key|secret_key|password|passwd)\s*[:=]\s*["'']?[A-Za-z0-9\-._~+/]{6,}["'']?'
     replacement: '\1=[REDACTED]'
 
-# Prompt-injection heuristics scanned against untrusted web content.
+# Prompt-injection heuristics scanned against NFKC-normalized, zero-width-stripped web text.
 prompt_injection_patterns:
   - '(?i)ignore\s+(all\s+)?(previous|prior|above)\s+instructions'
   - '(?i)disregard\s+(all\s+)?(previous|prior)\s+(rules|instructions)'

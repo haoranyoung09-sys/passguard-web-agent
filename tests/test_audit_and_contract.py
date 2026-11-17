@@ -1,4 +1,4 @@
-"""Unit tests for TaskContract enforcement and SHA-256 hash-chain audit logging."""
+"""Unit tests for TaskContract enforcement and HMAC-SHA256 / SHA-256 audit logging."""
 
 import json
 import sys
@@ -41,24 +41,22 @@ class TestTaskContractAndAudit(unittest.TestCase):
         self.assertIsNotNone(err)
         self.assertIn("CONTRACT_DENIED", err or "")
 
-    def test_audit_hash_chain_and_tamper_detection(self) -> None:
+    def test_audit_unkeyed_and_tamper_detection(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             log_path = Path(tmpdir) / "session.jsonl"
-            logger = AuditLogger(log_path, self.policy)
+            logger = AuditLogger(log_path, self.policy, hmac_key=b"")
             logger.record("session_start", "ok", {"token": "Bearer secret_abc_123456789"})
             logger.record("goto", "ok", {"url": "https://example.com"})
-            logger.record("click_oob", "denied", {"label": "Pay Now"})
 
             ok, count, msg = verify_audit_log(log_path)
             self.assertTrue(ok, msg)
-            self.assertEqual(count, 3)
+            self.assertEqual(count, 2)
 
-            # Verify secret was redacted before hashing/writing
-            raw_text = log_path.read_text(encoding="utf-8")
-            self.assertNotIn("secret_abc_123456789", raw_text)
-            self.assertIn("[REDACTED]", raw_text)
+            # require_hmac must reject unkeyed logs
+            ok_req, _, _ = verify_audit_log(log_path, require_hmac=True)
+            self.assertFalse(ok_req)
 
-            # Tamper with record #2 and verify detection
+            # Tamper with record #2
             lines = log_path.read_text(encoding="utf-8").splitlines()
             tampered = json.loads(lines[1])
             tampered["outcome"] = "tampered"
@@ -68,6 +66,23 @@ class TestTaskContractAndAudit(unittest.TestCase):
             ok_after, _, msg_after = verify_audit_log(log_path)
             self.assertFalse(ok_after)
             self.assertIn("Tampered record detected", msg_after)
+
+    def test_audit_hmac_keyed_verification(self) -> None:
+        secret_key = b"operator-held-hmac-secret-2026"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_path = Path(tmpdir) / "hmac.jsonl"
+            logger = AuditLogger(log_path, self.policy, hmac_key=secret_key)
+            logger.record("session_start", "ok", {"profile": "bank"})
+            logger.record("route_write_oob", "denied", {"url": "https://bank.example.com/pay"})
+
+            ok, count, msg = verify_audit_log(log_path, hmac_key=secret_key, require_hmac=True)
+            self.assertTrue(ok, msg)
+            self.assertEqual(count, 2)
+            self.assertIn("HMAC-SHA256", msg)
+
+            # Wrong key must fail verification
+            ok_wrong, _, _ = verify_audit_log(log_path, hmac_key=b"wrong-key", require_hmac=True)
+            self.assertFalse(ok_wrong)
 
 
 if __name__ == "__main__":

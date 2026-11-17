@@ -1,9 +1,11 @@
-"""Tamper-evident SHA-256 hash-chain audit logger for PassGuard Web Agent."""
+"""Tamper-evident hash-chain and optional HMAC-SHA256 audit logger for PassGuard Web Agent."""
 
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -27,12 +29,35 @@ def _redact_value(value: Any, policy: SecurityPolicy) -> Any:
     return value
 
 
-class AuditLogger:
-    """Append-only hash-chained JSONL audit log."""
+def _compute_tag(body: dict[str, Any], hmac_key: bytes | None) -> str:
+    raw = _canonical_json(body).encode("utf-8")
+    if hmac_key:
+        return hmac.new(hmac_key, raw, hashlib.sha256).hexdigest()
+    return hashlib.sha256(raw).hexdigest()
 
-    def __init__(self, log_path: Path, policy: SecurityPolicy) -> None:
+
+def resolve_hmac_key(key_file: Path | None = None) -> bytes | None:
+    """Load HMAC key from explicit key_file or PASSGUARD_AUDIT_KEY env var."""
+    if key_file is not None and key_file.exists():
+        raw = key_file.read_bytes().strip()
+        return raw if raw else None
+    env_key = os.environ.get("PASSGUARD_AUDIT_KEY", "").strip()
+    return env_key.encode("utf-8") if env_key else None
+
+
+class AuditLogger:
+    """Append-only hash-chained (or HMAC-SHA256 chained) JSONL audit log."""
+
+    def __init__(
+        self,
+        log_path: Path,
+        policy: SecurityPolicy,
+        hmac_key: bytes | None = None,
+    ) -> None:
         self.log_path = log_path
         self.policy = policy
+        self.hmac_key = hmac_key if hmac_key is not None else resolve_hmac_key()
+        self.mode = "hmac-sha256" if self.hmac_key else "sha256-unkeyed"
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         self._seq, self._prev_hash = self._resume_tail()
 
@@ -46,17 +71,18 @@ class AuditLogger:
         return int(last["seq"]), str(last["hash"])
 
     def record(self, action: str, outcome: str, details: dict[str, Any] | None = None) -> str:
-        """Append a redacted, hash-chained audit record and return its hash."""
+        """Append a redacted, chained audit record and return its digest/HMAC."""
         self._seq += 1
         body = {
             "seq": self._seq,
             "ts": datetime.now(timezone.utc).isoformat(),
+            "mode": self.mode,
             "action": action,
             "outcome": outcome,
             "details": _redact_value(details or {}, self.policy),
             "prev_hash": self._prev_hash,
         }
-        digest = hashlib.sha256(_canonical_json(body).encode("utf-8")).hexdigest()
+        digest = _compute_tag(body, self.hmac_key)
         entry = {**body, "hash": digest}
         with self.log_path.open("a", encoding="utf-8") as fh:
             fh.write(_canonical_json(entry) + "\n")
@@ -64,16 +90,19 @@ class AuditLogger:
         return digest
 
 
-def verify_audit_log(log_path: Path) -> tuple[bool, int, str]:
-    """Verify hash-chain integrity of an audit log file.
-
-    Returns (is_valid, entry_count, message).
-    """
+def verify_audit_log(
+    log_path: Path,
+    hmac_key: bytes | None = None,
+    require_hmac: bool = False,
+) -> tuple[bool, int, str]:
+    """Verify hash-chain / HMAC-SHA256 integrity of an audit log file."""
     if not log_path.exists():
         return False, 0, f"Audit log not found: {log_path}"
 
+    key = hmac_key if hmac_key is not None else resolve_hmac_key()
     lines = [ln for ln in log_path.read_text(encoding="utf-8").splitlines() if ln.strip()]
     expected_prev = GENESIS_HASH
+    modes_seen: set[str] = set()
 
     for idx, line in enumerate(lines, start=1):
         try:
@@ -84,20 +113,35 @@ def verify_audit_log(log_path: Path) -> tuple[bool, int, str]:
         if entry.get("seq") != idx:
             return False, idx - 1, f"Sequence mismatch at line {idx}: got {entry.get('seq')}"
         if entry.get("prev_hash") != expected_prev:
-            return False, idx - 1, f"Broken hash chain at seq {idx}: prev_hash mismatch"
+            return False, idx - 1, f"Broken chain at seq {idx}: prev_hash mismatch"
+
+        mode = entry.get("mode", "sha256-unkeyed")
+        modes_seen.add(mode)
+        if require_hmac and mode != "hmac-sha256":
+            return False, idx - 1, f"Record seq {idx} is unkeyed ({mode}); HMAC required."
+        if mode == "hmac-sha256" and not key:
+            return False, idx - 1, f"Record seq {idx} requires an HMAC key to verify."
 
         body = {
             "seq": entry["seq"],
             "ts": entry["ts"],
+            "mode": mode,
             "action": entry["action"],
             "outcome": entry["outcome"],
             "details": entry["details"],
             "prev_hash": entry["prev_hash"],
         }
-        expected_hash = hashlib.sha256(_canonical_json(body).encode("utf-8")).hexdigest()
-        if entry.get("hash") != expected_hash:
-            return False, idx - 1, f"Tampered record detected at seq {idx}: hash mismatch"
+        expected_tag = _compute_tag(body, key if mode == "hmac-sha256" else None)
+        if not hmac.compare_digest(str(entry.get("hash", "")), expected_tag):
+            return False, idx - 1, f"Tampered record detected at seq {idx}: digest mismatch"
 
-        expected_prev = expected_hash
+        expected_prev = expected_tag
 
-    return True, len(lines), f"Verified {len(lines)} intact audit record(s)."
+    if "hmac-sha256" in modes_seen and len(modes_seen) == 1:
+        return True, len(lines), f"Verified {len(lines)} HMAC-SHA256 audit record(s)."
+    return (
+        True,
+        len(lines),
+        f"Verified {len(lines)} unkeyed SHA-256 record(s) (detects accidental corruption; "
+        "set PASSGUARD_AUDIT_KEY / --key-file for cryptographic tamper resistance).",
+    )

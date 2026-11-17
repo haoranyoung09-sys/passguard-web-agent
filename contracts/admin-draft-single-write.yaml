@@ -1,0 +1,13 @@
+task: "Back-office form filling with single OOB-approved submission and ephemeral cleanup"
+domains:
+  - admin.example.com
+allow:
+  - navigate
+  - read
+  - click
+  - fill
+  - write
+max_write_requests: 1
+confirm_writes_mode: strict
+expires_in_seconds: 900
+ephemeral: true

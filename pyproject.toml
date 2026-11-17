@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "passguard-web-agent"
+version = "0.2.0"
+description = "Isolated, credential-safe web automation skill and browser proxy for AI agents."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+  "playwright>=1.48.0",
+  "PyYAML>=6.0",
+]
+
+[project.scripts]
+passguard-browser = "scripts.safe_browser:main"
+passguard-mcp = "scripts.mcp_server:main"

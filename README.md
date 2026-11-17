@@ -1,124 +1,108 @@
 # PassGuard Web Agent
 
-> **Speed of DOM refs, with security the model can't talk its way around.**
+[![CI](https://github.com/haoranyoung09-sys/passguard-web-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/haoranyoung09-sys/passguard-web-agent/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](pyproject.toml)
 
-PassGuard Web Agent is an AI Agent Skill and local browser security proxy built on Playwright. It solves the two biggest real-world barriers to web-task agents:
-1. **Slow & brittle screen control**: Replaces slow screenshot-and-coordinate loops with lightweight DOM element references (`@e1`, `@e2`, ...) and deterministic recipe replay.
-2. **Unsafe credentials & prompt-level "honor system" security**: Enforces hard, code-level guardrails inside a local browser daemon—with **out-of-band native human confirmation** that neither the LLM nor malicious website JavaScript can forge or bypass.
+> **DOM element refs with defense-in-depth browser guardrails — human-in-the-loop authentication, out-of-band OS confirmation, effect-based write interception, and verifiable audit logs.**
 
----
+![PassGuard Web Agent Security Flow](assets/demo.svg)
 
-## How PassGuard Differs from Similar Skills
-
-| Capability | Typical Browser Skills (`agent-browser`, `playwright-cli`, `browser-use`) | **PassGuard Web Agent** |
-| :--- | :--- | :--- |
-| **Element targeting** | Compact DOM / accessibility refs (`@e1`) | Compact DOM refs (`@e1`) + deterministic recipe replay |
-| **Password handling** | Relies on prompt rules ("don't ask for passwords") | **Hard circuit breaker**: password fields stripped from snapshots & blocked in `fill` |
-| **High-risk approval** | Model decides or passes a CLI flag | **Out-of-Band (OOB) native OS dialog** (`tkinter`), zero CLI bypass flag |
-| **Write protection** | Button-text heuristics only | **Effect-based network gate**: intercepts `POST`/`PUT`/`PATCH`/`DELETE` before send |
-| **Session scoping** | Unbounded once logged in | **OAuth-style Task Contracts** (allowed actions, write budget, TTL, `--ephemeral`) |
-| **Prompt injection** | Raw DOM / text passed to LLM | Filters hidden/tiny/same-color text, detects injection phrases, wraps `<untrusted_web_content>` |
-| **Data exfiltration** | None | **Cross-domain taint tracking** blocks leaking PII read on Site A into Site B forms |
-| **Auditability** | Plain stdout / debug logs | **SHA-256 hash-chained JSONL audit log** with `verify-log` integrity check |
+PassGuard Web Agent is an AI Agent Skill, local browser security proxy, and stdio MCP server built on Playwright. It replaces coordinate-based screenshot loops with lightweight DOM element references (`@e1`, `@e2`, ...) while enforcing code-level guardrails inside a single-thread Playwright daemon.
 
 ---
 
-## Architecture
+## Install in 30 Seconds
 
-```mermaid
-flowchart LR
-    Agent["AI Agent (LLM)"] -->|"CLI (goto / snapshot / click / fill)"| Daemon["Local PassGuard Daemon"]
-    Contract["Task Contract (YAML)"] --> Daemon
-    Policy["Security Policy (rules.yaml)"] --> Daemon
-    Daemon -->|"High-Risk / Network Write / Taint"| OOB["Native OS Dialog (Human Only)"]
-    Daemon -->|"Redacted & Framed DOM Refs"| Agent
-    Daemon -->|"Isolated Profile + Route Guard"| Browser["Chromium (Playwright)"]
-    Daemon -->|"SHA-256 Hash Chain"| Audit["Audit Log (.jsonl)"]
-```
-
----
-
-## Core Security & Speed Features
-
-1. **Out-of-Band (OOB) Human Confirmation (`scripts/oob_confirm.py`)**
-   - There is **no** `--confirm-risk` CLI flag. High-risk clicks and network write requests pop up a native always-on-top OS dialog (`tkinter`) outside both the browser DOM and the LLM's CLI channel. If no GUI display is available, it fails closed (denies).
-2. **Effect-Based Write Interception**
-   - Even if a deceptive button is labeled `"Continue"` instead of `"Pay"`, PassGuard intercepts the underlying `POST` / `PUT` / `PATCH` / `DELETE` request in `_route_guard`, displays the method, URL, and redacted body preview to the user, and blocks the request unless approved.
-3. **OAuth-Style Task Contracts (`contracts/`)**
-   - Scope a session with a YAML contract (`allow`, `domains`, `max_write_requests`, `expires_in_seconds`, `ephemeral`). When the write budget is exhausted or TTL expires, the daemon locks down automatically.
-4. **Zero-Credential Password Circuit Breaker**
-   - `input[type="password"]` and `autocomplete="*password*"` fields are omitted from `snapshot` and double-checked live in DOM before `fill`. Login pages return exit code `3` (`LOGIN_REQUIRED`) so you log in manually in the visible browser window.
-5. **Anti-Prompt-Injection Filtering & Framing**
-   - `SNAPSHOT_JS` and `VISIBLE_TEXT_JS` strip zero-size, `display:none`, `visibility:hidden`, low-opacity, tiny-font (`<2px`), off-screen, and same-color-as-background elements. Extracted output is scanned for injection patterns and wrapped in `<untrusted_web_content>`.
-6. **Cross-Domain Taint Tracking**
-   - Sensitive data (emails, phone numbers, ID/card-like numbers) observed on Origin A is tracked in `TaintTracker`. Attempting to `fill` that data into Origin B triggers a cross-domain exfiltration block/OOB check.
-7. **Tamper-Evident Hash-Chain Audit Log (`scripts/audit.py`)**
-   - Every session event, blocked request, and OOB decision is redacted and appended to `~/.passguard-web-agent/logs/<profile>.jsonl` with a rolling SHA-256 hash chain (`verify-log`).
-8. **Ephemeral Hygiene & Site Memory Replay**
-   - Use `--ephemeral` for sensitive tasks to wipe the isolated browser profile directory on `stop`.
-   - Use `save-recipe` and `replay` to run verified multi-step workflows deterministically without per-step LLM inference—while keeping every security gate enforced.
-
----
-
-## Quick Start
-
+### Option A: As an Agent Skill
 ```bash
+git clone https://github.com/haoranyoung09-sys/passguard-web-agent.git
+cd passguard-web-agent
 pip install -r requirements.txt
 playwright install chromium
 ```
-
-### 1. Read-Only Research Session (Scoped Contract)
-
+Or install directly with the Skills CLI (if supported by your client):
 ```bash
-python scripts/safe_browser.py start --profile research --contract contracts/readonly-research.yaml
-python scripts/safe_browser.py goto https://github.com --profile research
-python scripts/safe_browser.py snapshot --profile research
-python scripts/safe_browser.py text --profile research
-python scripts/safe_browser.py stop --profile research
-python scripts/safe_browser.py verify-log --profile research
+npx skills add haoranyoung09-sys/passguard-web-agent
 ```
 
-### 2. Ephemeral Sensitive Workflow
-
-```bash
-python scripts/safe_browser.py start --profile banking --allow-domains bank.example.com --ephemeral --ttl 900
-python scripts/safe_browser.py goto https://bank.example.com --profile banking
-# If login page appears, log in manually in the visible browser window, then:
-python scripts/safe_browser.py snapshot --profile banking
-python scripts/safe_browser.py stop --profile banking   # Automatically wipes profile directory
+### Option B: As an MCP Server (Claude Desktop / Cursor / Antigravity)
+Add this to your MCP config (`mcpServers`):
+```json
+{
+  "passguard-web-agent": {
+    "command": "python",
+    "args": ["/path/to/passguard-web-agent/scripts/mcp_server.py"]
+  }
+}
 ```
 
 ---
 
-## Project Structure
+## Key Security & Engineering Features
 
-```text
-passguard-web-agent/
-├── SKILL.md                          # Agent skill instructions & workflow
-├── rules.yaml                        # Keywords, login patterns, redaction, injection & taint rules
-├── requirements.txt
-├── contracts/
-│   ├── readonly-research.yaml        # Example: read-only research contract
-│   └── safe-form-fill.yaml           # Example: single-write ephemeral contract
-├── scripts/
-│   ├── safe_browser.py               # Playwright security proxy CLI & local session daemon
-│   ├── security.py                   # Policy, TaskContract, TaintTracker, anti-injection & redaction
-│   ├── audit.py                      # SHA-256 hash-chained audit logger & verifier
-│   └── oob_confirm.py                # Out-of-band native OS confirmation dialog
-└── tests/
-    ├── test_security.py              # Policy, redaction, injection & taint tests
-    └── test_audit_and_contract.py    # Contract TTL/budget & hash-chain tamper detection tests
-```
+1. **Dedicated Single-Thread Playwright Actor (`scripts/safe_browser.py`)**
+   - All Playwright operations execute serially inside one dedicated worker thread via a task queue, preventing greenlet cross-thread failures behind `ThreadingHTTPServer`.
+2. **Out-of-Band (OOB) Human Confirmation (`scripts/oob_confirm.py`)**
+   - There is **no** `--confirm-risk` CLI flag. High-risk clicks, write requests, and cross-domain data transfers trigger a native always-on-top OS dialog (`tkinter`) outside both the browser DOM and the LLM CLI channel. Fails closed (denies) on headless systems without a display.
+3. **Full-Resource Allowlist & Service Worker Blocking**
+   - Launches Chromium with `service_workers="block"`.
+   - Enforces `--allow-domains` across **all** resource types (documents, XHR/fetch, images, scripts, `ping`/`sendBeacon`, and WebSockets), closing `<img src="evil.com/?d=...">` and beacon exfiltration channels.
+4. **Effect-Based Write Interception + Smart Mode**
+   - Intercepts `POST`, `PUT`, `PATCH`, `DELETE`, `ping`, and WebSocket requests in `_route_guard`, summarizing JSON/form fields in human-readable form before approval.
+   - Supports `confirm_writes_mode`: `strict` (prompt all writes), `smart` (auto-allow known telemetry paths in `rules.yaml` while still respecting write budgets), or `none`.
+5. **TOCTOU Click Defense & Multi-Frame / Shadow DOM Snapshots**
+   - Invalidates stale refs on navigation and re-reads live element attributes (`innerText`, `aria-label`, `title`, `type`) immediately before clicking.
+   - Scans `page.frames` and open `shadowRoot`s, filtering `display:none`, `visibility:hidden`, low-opacity, `<2px` font, off-screen, and ancestor-same-color hidden text.
+6. **Zero-Credential Password Circuit Breaker**
+   - Password fields (`input[type="password"]`, `autocomplete="*password*"`) are stripped from snapshots and blocked in `fill` (verified live in DOM). Login URLs (`path`-boundary matched) and OTP/QR/Passkey pages return exit code `3` (`LOGIN_REQUIRED`) for manual user login.
+7. **Cross-Domain Taint Tracking**
+   - Sensitive data (emails, phone numbers, ID/card-like numbers) observed on Site A is tracked across `fill`, URL query strings, and request bodies (checking raw, URL-decoded, and Base64 variants).
+8. **HMAC-SHA256 / SHA-256 Audit Logs (`scripts/audit.py`)**
+   - Records every action and block decision (redacted) in `~/.passguard-web-agent/logs/<profile>.jsonl`.
+   - Set `PASSGUARD_AUDIT_KEY` (or `--key-file` on `verify-log --require-hmac`) stored outside the agent's access for cryptographic tamper resistance. Without an external key, the unkeyed SHA-256 chain detects accidental corruption only.
+9. **MCP Server (`scripts/mcp_server.py`) & PassGuard Bench (`bench/run_bench.py`)**
+   - Stdio JSON-RPC 2.0 MCP server (`passguard_start`, `passguard_goto`, `passguard_snapshot`, `passguard_click`, `passguard_fill`, `passguard_text`, `passguard_stop`) enabling privilege-separated deployment where the agent has no shell access.
+   - Local adversarial benchmark (`bench/run_bench.py`) testing hidden-text injection, deceptive `POST` buttons, `sendBeacon`, `<img ...>` leaks, login traps, and verified ephemeral cleanup.
 
-## Running Tests
+---
+
+## Ready-to-Use Task Contract Templates (`contracts/`)
+
+- [`contracts/readonly-research.yaml`](contracts/readonly-research.yaml) — Read-only web research (`max_write_requests: 0`, 30m TTL).
+- [`contracts/ecommerce-readonly.yaml`](contracts/ecommerce-readonly.yaml) — Price comparison & order lookup with separate `asset_domains` for static CDNs and zero writes allowed.
+- [`contracts/admin-draft-single-write.yaml`](contracts/admin-draft-single-write.yaml) — Back-office form filling capped at `1` OOB-confirmed write request with `--ephemeral` profile wipe on exit.
+
+---
+
+## Honest Threat Model & Deployment Boundaries
+
+> [!IMPORTANT]
+> **Same-Privilege Limitation**: If you run the AI agent under the **same OS user** with unrestricted shell/filesystem access, the agent could theoretically read local profile directories, alter `rules.yaml`, or kill the daemon directly.
+>
+> **How to achieve true non-bypassable isolation**: Run `safe_browser.py` / `mcp_server.py` under a **dedicated OS user or container** that owns `~/.passguard-web-agent/` and `PASSGUARD_AUDIT_KEY`, and expose **only** the MCP stdio pipe or RPC socket to the agent (without shell access).
+
+- **Prompt injection heuristics**: Regex scanning (after NFKC normalization and zero-width stripping) is advisory defense-in-depth; primary protection comes from `<untrusted_web_content>` framing plus deterministic code-level gates.
+
+---
+
+## Running Tests & Adversarial Bench
 
 ```bash
+# Pure-Python unit tests (13 checks, no browser required)
 python -m unittest discover -s tests -v
+
+# End-to-end adversarial Chromium benchmark (6 checks, requires Playwright + Chromium)
+python bench/run_bench.py
 ```
 
----
-
-## Threat Model & Honest Limitations
-
-- **What PassGuard stops**: Accidental or prompt-injected password leakage to LLMs, self-approved dangerous clicks, silent background `POST`/`DELETE` requests, hidden-text prompt injections, cross-site PII exfiltration, and unverified log tampering.
-- **What PassGuard assumes**: The local host OS and Python runtime are trusted; the user runs the visible browser locally when OOB native confirmation or manual login is required.
+Latest verified `PassGuard Bench` run:
+```text
+[1/6] Starting BrowserController...
+[2/6] Navigating to adversarial fixture...
+[3/6] Checking hidden-text injection stripping...
+[4/6] Taking snapshot & testing deceptive POST /api/pay...
+[5/6] Testing sendBeacon block & password circuit breaker...
+[6/6] Closing controller & verifying ephemeral cleanup...
+PassGuard Bench: ALL 6 E2E ADVERSARIAL CHECKS PASSED.
+```
