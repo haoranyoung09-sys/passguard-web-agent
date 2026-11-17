@@ -1,0 +1,90 @@
+# PassGuard Web Agent Security Policy
+
+# URL path / keyword patterns that indicate an authentication or login flow.
+# When matched, the agent must pause and let the user log in manually.
+login_url_patterns:
+  - /login
+  - /signin
+  - /sign-in
+  - /auth
+  - /oauth
+  - /sso
+  - /passport
+  - /session/new
+
+# Keywords on buttons, links, or submit controls that trigger a mandatory
+# out-of-band (OOB) human confirmation dialog before clicking.
+high_risk_keywords:
+  - 支付
+  - 付款
+  - 结算
+  - 下单
+  - 转账
+  - 汇款
+  - 删除
+  - 移除
+  - 注销
+  - 清空
+  - 提交订单
+  - 确认购买
+  - 授权
+  - 发布
+  - 群发
+  - pay
+  - purchase
+  - checkout
+  - transfer
+  - delete
+  - remove
+  - destroy
+  - deactivate
+  - revoke
+  - authorize
+  - publish
+  - wire
+
+# HTTP methods intercepted in read-only mode or write-gate checks.
+read_only_blocked_methods:
+  - POST
+  - PUT
+  - PATCH
+  - DELETE
+
+# Regex patterns redacted from page snapshots, text outputs, request previews,
+# and audit logs before returning data to the LLM context.
+redaction_patterns:
+  - name: bearer_token
+    pattern: '(?i)(Bearer\s+)[A-Za-z0-9\-._~+/]+=*'
+    replacement: '\1[REDACTED]'
+  - name: openai_or_generic_sk
+    pattern: '\bsk-[A-Za-z0-9_-]{16,}\b'
+    replacement: '[REDACTED_KEY]'
+  - name: github_token
+    pattern: '\b(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}\b'
+    replacement: '[REDACTED_GITHUB_TOKEN]'
+  - name: aws_access_key
+    pattern: '\bAKIA[0-9A-Z]{16}\b'
+    replacement: '[REDACTED_AWS_KEY]'
+  - name: kv_secret
+    pattern: '(?i)\b(access_token|refresh_token|id_token|session_id|csrf_token|api_key|secret_key|password|passwd)\s*[:=]\s*["'']?[A-Za-z0-9\-._~+/]{6,}["'']?'
+    replacement: '\1=[REDACTED]'
+
+# Prompt-injection heuristics scanned against untrusted web content.
+prompt_injection_patterns:
+  - '(?i)ignore\s+(all\s+)?(previous|prior|above)\s+instructions'
+  - '(?i)disregard\s+(all\s+)?(previous|prior)\s+(rules|instructions)'
+  - '(?i)you\s+are\s+now\s+(in\s+)?(developer|admin|system)\s+mode'
+  - '(?i)reveal\s+(your\s+)?(system\s+prompt|api\s+key|credentials)'
+  - '(?i)exfiltrate|send\s+the\s+(token|cookie|password)\s+to'
+  - '忽略(之前|以上|所有)(的)?(指令|规则|约束)'
+  - '无视(之前|以上|所有)(的)?(指令|规则)'
+  - '把(密码|cookie|token|密钥).{0,15}(发送到|填到|提交到)'
+
+# Sensitive PII/data patterns tracked for cross-domain taint exfiltration defense.
+taint_patterns:
+  - name: email
+    pattern: '\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b'
+  - name: cn_phone
+    pattern: '\b1[3-9]\d{9}\b'
+  - name: id_or_card_like
+    pattern: '\b\d{15,19}\b'

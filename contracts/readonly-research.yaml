@@ -1,0 +1,11 @@
+task: "Read-only web research and data extraction"
+domains:
+  - github.com
+allow:
+  - navigate
+  - read
+  - click
+max_write_requests: 0
+confirm_writes: true
+expires_in_seconds: 1800
+ephemeral: false
