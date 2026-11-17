@@ -6,7 +6,9 @@
 
 > **DOM element refs with defense-in-depth browser guardrails — human-in-the-loop authentication, out-of-band OS confirmation, effect-based write interception, and verifiable audit logs.**
 
-![PassGuard Web Agent Security Flow](assets/demo.svg)
+![PassGuard Web Agent Live Security Gate Demo](assets/demo.gif)
+
+*Watch the high-res MP4 demo: [`assets/demo.mp4`](assets/demo.mp4) (recorded with [`bench/record_demo.py`](bench/record_demo.py)) · Static diagram: [`assets/demo.svg`](assets/demo.svg).*
 
 PassGuard Web Agent is an AI Agent Skill, local browser security proxy, and stdio MCP server built on Playwright. It replaces coordinate-based screenshot loops with lightweight DOM element references (`@e1`, `@e2`, ...) while enforcing code-level guardrails inside a single-thread Playwright daemon.
 
